@@ -6,14 +6,14 @@ import feed from './src/feed.js'
 import storage from './src/storage.js'
 
 export default (core) => {
-    const { mikser, useLogger, onLoaded } = core
-    
+    const { runtime, useLogger, onLoaded } = core
+
     async function whiteboxApi(service, route, data) {
         const logger = useLogger()
-        const { services } = mikser.config.whitebox
+        const { services } = runtime.config.whitebox
         const { url, token } = services[service]
-        if (!url || !token ) return
-    
+        if (!url || !token) return
+
         try {
             const response = await axios.post(url + route + '?stamp=' + Date.now(), data, {
                 headers: {
@@ -25,7 +25,7 @@ export default (core) => {
             logger.error(err, 'WhiteBox system error: %s %o', route, data)
         }
     }
-    
+
     let machineId
     async function useMachineId() {
         if (!machineId) {
@@ -36,11 +36,11 @@ export default (core) => {
 
     onLoaded(() => {
         const logger = useLogger()
-        logger.info('WhiteBox context: %s', mikser.config.whitebox?.context)
+        logger.info('WhiteBox context: %s', runtime.config.whitebox?.context)
     })
 
     return {
-        whiteboxApi, 
+        whiteboxApi,
         useMachineId,
         ...feed({ ...core, whiteboxApi, useMachineId }),
         ...storage({ ...core, whiteboxApi, useMachineId }),

@@ -8,31 +8,31 @@ import path from 'path'
 import { globby } from 'globby'
 import { setTimeout } from 'timers/promises'
 
-export default ({ 
-    mikser, 
-    useLogger, 
-    onLoaded, 
+export default ({
+    runtime,
+    useLogger,
+    onLoaded,
     onImport,
     onSync,
-    onProcessed, 
+    onProcessed,
     onFinalize,
-    useJournal, 
-    useMachineId, 
+    useJournal,
+    useMachineId,
     watch,
     checksum,
     matchEntity,
     findEntity,
     createEntity,
-    updateEntity, 
+    updateEntity,
     deleteEntity,
-    constants: { ACTION, OPERATION }, 
+    constants: { ACTION, OPERATION },
 }) => {
     const collection = 'storage'
     const type = 'file'
-    
+
     const pendingUploads = new Set()
     const history = new Map()
-    
+
     async function upload(fileName, uploadName, uploadChecksum) {
         const logger = useLogger()
 
@@ -44,7 +44,7 @@ export default ({
             try {
                 const fh = await fs.open(fileName, 0x10000000)
                 try {
-                    const { context, services: { storage } } = mikser.config.whitebox
+                    const { context, services: { storage } } = runtime.config.whitebox
                     let data = {
                         file: uploadName,
                         context: context || await useMachineId()
@@ -62,22 +62,22 @@ export default ({
                         let formHeaders = form.getHeaders()
                         try {
                             const responseUpload = await axios
-                            .post(storage.url + '/upload', form, {
-                                headers: {
-                                    Authorization: 'Bearer ' + storage.token,
-                                    ...formHeaders,
-                                    ...uploadHeaders,
-                                },
-                                maxContentLength: Infinity,
-                                maxBodyLength: Infinity
-                            })
+                                .post(storage.url + '/upload', form, {
+                                    headers: {
+                                        Authorization: 'Bearer ' + storage.token,
+                                        ...formHeaders,
+                                        ...uploadHeaders,
+                                    },
+                                    maxContentLength: Infinity,
+                                    maxBodyLength: Infinity
+                                })
                             if (responseUpload.data.uploads) {
                                 for (let file in responseUpload.data.uploads) {
                                     logger.debug('WhiteBox storage %s: %s', 'upload', uploadName)
                                     logger.debug('WhiteBox storage %s: %s', 'link', responseUpload.data.uploads[file])
                                     history.set(uploadName, uploadChecksum)
                                 }
-                            }							
+                            }
                         } catch (err) {
                             logger.error('WhiteBox storage upload error: %s', err.message)
                         }
@@ -101,7 +101,7 @@ export default ({
 
     async function link(uploadName) {
         const logger = useLogger()
-        const { context, services: { storage } } = mikser.config.whitebox
+        const { context, services: { storage } } = runtime.config.whitebox
         let data = {
             file: uploadName,
             context: context || await useMachineId()
@@ -114,10 +114,10 @@ export default ({
             logger.trace('WhiteBox storage error: %s', err)
         }
     }
-    
+
     async function unlink(uploadName) {
         const logger = useLogger()
-        const { context, services: { storage } } = mikser.config.whitebox
+        const { context, services: { storage } } = runtime.config.whitebox
         let data = {
             file: uploadName,
             context: context || await useMachineId()
@@ -129,15 +129,15 @@ export default ({
             logger.trace('WhiteBox storage error: %s', err)
         }
     }
-    
+
     onImport(async () => {
         const logger = useLogger()
-        const paths = await globby('**/*', { cwd: mikser.options.storageFolder })
+        const paths = await globby('**/*', { cwd: runtime.options.storageFolder })
         logger.info('Importing whitebox storage: %d', paths.length)
-    
+
         return Promise.all(paths.map(async relativePath => {
-            const source = path.join(mikser.options.storageFolder, relativePath)
-            const uploadName = source.replace(mikser.options.workingFolder, '')
+            const source = path.join(runtime.options.storageFolder, relativePath)
+            const uploadName = source.replace(runtime.options.workingFolder, '')
 
             await createEntity({
                 id: path.join(`/${collection}`, relativePath),
@@ -155,25 +155,25 @@ export default ({
 
     onProcessed(async (signal) => {
         const logger = useLogger()
-        const { services: { storage } } = mikser.config.whitebox || { services: {} }
+        const { services: { storage } } = runtime.config.whitebox || { services: {} }
         if (!storage) return
-    
+
         let added = 0
         let deleted = 0
         await pMap(useJournal('WhiteBox storage processing', [OPERATION.CREATE, OPERATION.UPDATE, OPERATION.DELETE], signal), async ({ entity, operation }) => {
             const match = storage.match || ((entity) => entity.id.indexOf('/storage/') != -1)
             if (matchEntity(entity, match)) {
-                const uploadName = entity.source.replace(mikser.options.workingFolder, '')
+                const uploadName = entity.source.replace(runtime.options.workingFolder, '')
                 switch (operation) {
                     case OPERATION.CREATE:
                     case OPERATION.UPDATE:
                         added++
                         await upload(entity.source, uploadName, entity.checksum)
-                    break
+                        break
                     case OPERATION.DELETE:
                         deleted++
                         await unlink(uploadName)
-                    break
+                        break
                 }
             }
         }, { concurrency: 4, signal })
@@ -184,13 +184,13 @@ export default ({
 
     onFinalize(async (signal) => {
         const logger = useLogger()
-        const { services: { storage } } = mikser.config.whitebox || { services: {} }
+        const { services: { storage } } = runtime.config.whitebox || { services: {} }
         if (!storage) return
 
         await pMap(useJournal('WhiteBox storage output', [OPERATION.RENDER], signal), async ({ entity, output }) => {
-            if (output?.success) {                
-                if (storage.match && storage.match(entity) || !storage.match && entity.id.indexOf('/storage/') != -1 ) {
-                    const uploadName = entity.destination.replace(mikser.options.outputFolder, '').replace(mikser.options.workingFolder, '')
+            if (output?.success) {
+                if (storage.match && storage.match(entity) || !storage.match && entity.id.indexOf('/storage/') != -1) {
+                    const uploadName = entity.destination.replace(runtime.options.outputFolder, '').replace(runtime.options.workingFolder, '')
                     try {
                         const uploadChecksum = await checksum(entity.destination)
                         await upload(entity.destination, uploadName, uploadChecksum)
@@ -208,13 +208,13 @@ export default ({
 
     onLoaded(async () => {
         const logger = useLogger()
-        const { context, services: { storage } } = mikser.config.whitebox
+        const { context, services: { storage } } = runtime.config.whitebox
         if (!storage) return
 
-        mikser.options.storage = storage?.storageFolder || collection
-        mikser.options.storageFolder = path.join(mikser.options.workingFolder, mikser.options.storage)
+        runtime.options.storage = storage?.storageFolder || collection
+        runtime.options.storageFolder = path.join(runtime.options.workingFolder, runtime.options.storage)
 
-        if (mikser.options.clear) {
+        if (runtime.options.clear) {
             const data = {
                 context: context || await useMachineId()
             }
@@ -226,21 +226,21 @@ export default ({
             }
         }
 
-        logger.info('WhiteBox storage folder: %s', mikser.options.storageFolder)
-        await fs.mkdir(mikser.options.storageFolder, { recursive: true })
-    
-        watch(collection, mikser.options.storageFolder)
+        logger.info('WhiteBox storage folder: %s', runtime.options.storageFolder)
+        await fs.mkdir(runtime.options.storageFolder, { recursive: true })
+
+        watch(collection, runtime.options.storageFolder)
     })
 
     onSync(collection, async ({ action, context }) => {
         if (!context.relativePath) return false
         const { relativePath } = context
-    
-        const source = path.join(mikser.options.storageFolder, relativePath)
+
+        const source = path.join(runtime.options.storageFolder, relativePath)
         const format = path.extname(relativePath).substring(1).toLowerCase()
         const id = path.join(`/${collection}`, relativePath)
-        const uploadName = source.replace(mikser.options.workingFolder, '')
-        
+        const uploadName = source.replace(runtime.options.workingFolder, '')
+
         let synced = true
         switch (action) {
             case ACTION.CREATE:
@@ -255,7 +255,7 @@ export default ({
                     checksum: await checksum(source),
                     link: await link(uploadName)
                 })
-            break
+                break
             case ACTION.UPDATE:
                 const current = await findEntity({ id })
                 if (current?.checksum != checksum) {
@@ -273,7 +273,7 @@ export default ({
                 } else {
                     synced = false
                 }
-            break
+                break
             case ACTION.DELETE:
                 await unlink(uploadName)
                 await deleteEntity({
@@ -281,11 +281,11 @@ export default ({
                     collection,
                     type,
                 })
-            break
+                break
         }
         return synced
     })
-    
+
     return {
         collection,
         type
