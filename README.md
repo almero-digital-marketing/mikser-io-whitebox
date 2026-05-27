@@ -2,6 +2,8 @@
 
 WhiteBox integration for [Mikser](https://github.com/almero-digital-marketing/mikser-io). Pushes processed entities to a WhiteBox `feed` service and synchronises a watched folder with a WhiteBox `storage` service.
 
+For projects that publish into a WhiteBox-backed downstream — a multi-site network, an editorial backend, or an external content consumer. The push happens inside mikser's normal cycle (no separate sync job, no cron, no out-of-band drift) and respects `--clear` for a clean rebuild of the remote state.
+
 ## Install
 
 ```bash
