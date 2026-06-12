@@ -14,26 +14,29 @@ npm install mikser-io-whitebox
 
 ```js
 // mikser.config.js
+import { whitebox } from 'mikser-io-whitebox'
+
 export default {
-  plugins: ['whitebox'],
-  whitebox: {
-    context: 'my-project',
-    services: {
-      feed: {
-        url: 'https://feed.example.com',
-        token: 'FEED_TOKEN',
-        expire: '10 days',
-        match: (entity) => entity.type === 'document'
-      },
-      storage: {
-        url: 'https://storage.example.com',
-        token: 'STORAGE_TOKEN',
-        storageFolder: 'storage',
-        expire: '10 days',
-        match: (entity) => entity.id.startsWith('/storage/')
+  plugins: [
+    whitebox({
+      context: 'my-project',
+      services: {
+        feed: {
+          url: 'https://feed.example.com',
+          token: 'FEED_TOKEN',
+          expire: '10 days',
+          match: (entity) => entity.type === 'document'
+        },
+        storage: {
+          url: 'https://storage.example.com',
+          token: 'STORAGE_TOKEN',
+          storageFolder: 'storage',
+          expire: '10 days',
+          match: (entity) => entity.id.startsWith('/storage/')
+        }
       }
-    }
-  }
+    })
+  ]
 }
 ```
 
